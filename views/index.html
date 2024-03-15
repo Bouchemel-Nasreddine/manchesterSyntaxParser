@@ -4,19 +4,119 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OWL 2 Manchester Syntax Parser</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      resize: vertical;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #suggestions {
+      margin-bottom: 10px;
+    }
+    #result {
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+    }
+  </style>
 </head>
 <body>
   <h1>OWL 2 Manchester Syntax Parser</h1>
-  <form  action="/getSuggestions" method="post">
+  <form>
     <label>Enter OWL 2 Manchester Syntax:</label>
     <textarea id="owlInput" name="owlInput" rows="4" cols="50" required></textarea>
     <br>
-    <button id="submitButton" type="submit">Parse</button>
+    <button id="submitButton" type="button">Parse</button>
   </form>
-  <div id="suggestions" ></div>
+  <div id="suggestions"></div>
   <div id="result"></div>
  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
-  <script src="client.js" type="module"></script>
-  <!--  <script src="ParserHandler.js" type="module"></script> -->
+  <script>
+    $(document).ready(function() {
+      const owlInput = $('#owlInput');
+      const suggestionsDiv = $('#suggestions');
+      const submitButton = $('#submitButton');
+      const resultDiv = $('#result');
+
+      owlInput.on('input', function() {
+          console.log("input changed");
+        const currentText = owlInput.val();
+        getSuggestions(currentText);
+      });
+
+      submitButton.on('click', function(event) {
+        event.preventDefault();
+        console.log("submitting syntax")
+
+        const currentText = owlInput.val();
+        //send http request to server http://localhost:3000/parse
+        $.ajax({
+          url: 'http://localhost:3000/parse',
+          method: 'POST',
+          data: { owlInput: currentText },
+          success: function(response) {
+            console.log('Response:', response);
+            resultDiv.html(response);
+          },
+          error: function(err) {
+            console.error('Error parsing input:', err);
+            resultDiv.html(err);
+          }
+        });
+        //invoke printTree method from sibling file ParserHandler.js
+        printTree(currentText, 0);
+      });
+
+      function getSuggestions(input) {
+        $.ajax({
+          url: 'http://localhost:3000/getSuggestions',
+          method: 'POST',
+          data: { owlInput: input },
+          success: function(response) {
+            const currentContext = response.currentContext;
+            const suggestions = response.suggestions;
+
+            console.clear();
+            console.log('Current Context:', currentContext);
+            console.log('Suggestions:', suggestions);
+
+            suggestionsDiv.html('Suggestions: ' + suggestions.join(', '));
+          },
+          error: function(err) {
+            console.error('Error getting suggestions:', err);
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>

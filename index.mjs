@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 
 import antlr4, { ParseTreeVisitor, ParseTreeWalker } from 'antlr4';
-
+import autosuggest from 'antlr4-autosuggest';
 
 import OWL2ManchesterParser from './parser/OWL2ManchesterParser.js';
 import OWL2ManchesterLexer from './parser/OWL2ManchesterLexer.js';
@@ -59,32 +59,16 @@ app.use("/parse", (req, res) => {
   // Create a parser
   const parser = new OWL2ManchesterParser(tokenStream);
 
-  const completionListener = new MyCompletionListener();
-  parser.addParseListener(completionListener);
-
   parser.removeErrorListeners();
   const errorListener = new MyErrorListener();
   parser.addErrorListener(new MyErrorListener());
 
   const parseTree = parser.axiom();
-  //get the root element of the tree
-  console.log(parseTree.children[0].getText());
 
-  const walker = new ParseTreeWalker();
-
-  //walker.walk(completionListener, parseTree);
-
-  const treePrinter = new TreePrinterVisitor();
-  const treeOutput = treePrinter.visit(parseTree);
-  console.log(treeOutput);
-
-
-  // Now, you can traverse the parse tree and process the information
-
-  //console.log("parseTree: ", parseTree.children[0]);
-  const currentContext = completionListener.getCurrentContext();
   if (parser._syntaxErrors > 0) {
-    //console.error("Number of syntax errors: ", parser._syntaxErrors);
+    console.error("Number of syntax errors: ", parser._syntaxErrors);
+    //console.error(parser.parserError.toString());
+
     return res.status(200).send("syntax not valid")
   } else {
     //console.log("parsing successful");
@@ -98,27 +82,16 @@ app.use("/parse", (req, res) => {
 app.use("/getSuggestions", (req, res) => {
   const owlInput = req.body.owlInput;
 
-  const inputStream = new antlr4.InputStream(owlInput);
-  const lexer = new OWL2ManchesterLexer(inputStream);
-  const tokenStream = new antlr4.CommonTokenStream(lexer);
-  const parser = new OWL2ManchesterParser(tokenStream);
+  const autosuggester = autosuggest.autosuggester(OWL2ManchesterLexer, OWL2ManchesterParser);
 
-  const completionListener = new MyCompletionListener();
-  parser.addParseListener(completionListener);
+  let suggestions = autosuggester.autosuggest(owlInput);
 
-  parser.removeErrorListeners();
-  const errorListener = new MyErrorListener();
-  parser.addErrorListener(new MyErrorListener());
+  console.log("suggestions: ", suggestions);
 
-  const parseTree = parser.axiom();
-  const currentContext = completionListener.getCurrentContext();
-  const suggestions = completionListener.getSuggestions();
+  console.log("errors: ", autosuggester);
 
-  res.json({ currentContext, suggestions });
+  res.json({ suggestions });
 });
-
-
-
 
 
 class MyErrorListener extends antlr4.error.ErrorListener {
@@ -128,7 +101,7 @@ class MyErrorListener extends antlr4.error.ErrorListener {
   }
 
   syntaxError(recognizer, offendingSymbol, line, column, msg, e) {
-    //console.error(`Syntax Error at line ${line}:${column}: ${msg}`);
+    console.error(`Syntax Error at line ${line}:${column}: ${msg}`);
     this.errorMessages.push(`Error at line ${line}:${column}: ${msg}`);
   }
 
@@ -142,33 +115,26 @@ class MyCompletionListener extends OWL2ManchesterListener {
     super();
     this.currentContext = [];
     this.suggestions = [];
+    this.openingParenTyped = false;
   }
 
   enterClassExpression(ctx) {
-    // Example: Keep track of the current context for class expressions
-    //console.log("enterClassExpression: ", ctx);
-    this.currentContext.push("ClassExpression");    
+    if (ctx.KW_CLASS()) console.log("class axiom")
+    else if (ctx.KW_)
+    this.currentContext.push("ClassExpression");
     const isNestedExpression = this.currentContext.includes("ClassExpression");
-    //console.log("currentContext: ", this.currentContext);
-    // Clear previous suggestions
     this.suggestions = [];
-
-    // Example: Suggest connectors when entering a class expression
-    // if (this.isTopLevelClassExpression()) {
-    //   this.suggestions = ["SomeClass1", "SomeClass2", "SomeClass3"];} else {
-    //   this.suggestions = ["and", "or", "not"];
-    // }
+    
+    // Determine relevant suggestions based on the context
     if (this.openingParenTyped || !isNestedExpression) {
-      // If an opening parenthesis has been typed recently or it's a top-level expression, suggest class names
-      this.suggestions = ["SomeClass1", "SomeClass2", "SomeClass3"];
+      // If an opening parenthesis has been typed recently or it's a top-level expression,
+      // suggest class names
     } else {
       // Provide default suggestions for nested expressions
       this.suggestions = ["and", "or", "not"];
     }
-  
-
-    // console.log("suggestions: ", this.suggestions);
   }
+
 
   exitClassExpression(ctx) {
     // Example: Remove the current context when exiting class expression
@@ -180,6 +146,10 @@ class MyCompletionListener extends OWL2ManchesterListener {
 
   getCurrentContext() {
     return this.currentContext.join(" > ");
+  }
+
+  setOpeningParenTyped(value) {
+    this.openingParenTyped = value;
   }
 
   getSuggestions() {
