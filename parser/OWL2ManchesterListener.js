@@ -14,24 +14,6 @@ export default class OWL2ManchesterListener extends antlr4.tree.ParseTreeListene
 	}
 
 
-	// Enter a parse tree produced by OWL2ManchesterParser#lexerError.
-	enterLexerError(ctx) {
-	}
-
-	// Exit a parse tree produced by OWL2ManchesterParser#lexerError.
-	exitLexerError(ctx) {
-	}
-
-
-	// Enter a parse tree produced by OWL2ManchesterParser#parserError.
-	enterParserError(ctx) {
-	}
-
-	// Exit a parse tree produced by OWL2ManchesterParser#parserError.
-	exitParserError(ctx) {
-	}
-
-
 	// Enter a parse tree produced by OWL2ManchesterParser#axiom.
 	enterAxiom(ctx) {
 	}

@@ -9,6 +9,7 @@ import autosuggest from 'antlr4-autosuggest';
 import OWL2ManchesterParser from './parser/OWL2ManchesterParser.js';
 import OWL2ManchesterLexer from './parser/OWL2ManchesterLexer.js';
 import OWL2ManchesterListener from './parser/OWL2ManchesterListener.js';
+import OntologyParser from './ontologyParser/ontology-parser.js';
 
 
 const app = express();
@@ -75,20 +76,44 @@ app.use("/parse", (req, res) => {
     return res.send("parsing successful")
   }
 
-})
+});
 
-// ... (previous server-side code)
-
-app.use("/getSuggestions", (req, res) => {
+app.use("/getSuggestions", async (req, res) => {
   const owlInput = req.body.owlInput;
+
+  const inputStream = new antlr4.InputStream(owlInput);
+
+  const lexer = new OWL2ManchesterLexer(inputStream);
+
+  const tokenStream = new antlr4.CommonTokenStream(lexer);
+
+  const parser = new OWL2ManchesterParser(tokenStream);
+
+  //const parseTree = parser.axiom();
+
+  // console.log("parseTree: ", parseTree);
+
+  // console.log("children0: ", parseTree.children[0]);
+
+  // console.log("children00: ", parseTree.children[0].children[0]);
+
+  // console.log("children02: ", parseTree.children[0].children[2]);
+
 
   const autosuggester = autosuggest.autosuggester(OWL2ManchesterLexer, OWL2ManchesterParser);
 
   let suggestions = autosuggester.autosuggest(owlInput);
 
-  console.log("suggestions: ", suggestions);
+  //go through suggestions and filter out suggestions with one letter
+  console.log("suggestions before: ", suggestions);
+  suggestions = suggestions.filter(suggestion => suggestion.length > 1);
+  console.log("suggestions after: ", suggestions);
 
-  console.log("errors: ", autosuggester);
+  // console.log("errors: ", autosuggester);
+
+  const ontoParser = new OntologyParser("./ontologyParser/OntologyModels-IOF-BFO.json", "BFO");
+
+  await ontoParser.initialize();
 
   res.json({ suggestions });
 });
@@ -121,10 +146,10 @@ class MyCompletionListener extends OWL2ManchesterListener {
   enterClassExpression(ctx) {
     if (ctx.KW_CLASS()) console.log("class axiom")
     else if (ctx.KW_)
-    this.currentContext.push("ClassExpression");
+      this.currentContext.push("ClassExpression");
     const isNestedExpression = this.currentContext.includes("ClassExpression");
     this.suggestions = [];
-    
+
     // Determine relevant suggestions based on the context
     if (this.openingParenTyped || !isNestedExpression) {
       // If an opening parenthesis has been typed recently or it's a top-level expression,
@@ -177,12 +202,11 @@ class MyCompletionListener extends OWL2ManchesterListener {
 
 }
 
-//write a funtiocn tht does 
-
 class TreePrinterVisitor extends ParseTreeVisitor {
   constructor() {
     super();
     this.depth = 0;
+    this.lastIdentifier = null; 
   }
 
   // Override the default behavior for visiting rules
@@ -208,6 +232,30 @@ class TreePrinterVisitor extends ParseTreeVisitor {
   }
 }
 
+
+// Define a custom visitor
+class MyVisitor extends antlr4.tree.ParseTreeVisitor {
+  constructor() {
+    super();
+    this.lastIdentifier = null; 
+  }
+
+  // Visit ClassExpressionContext nodes
+  visitClassExpression(ctx) {
+    console.log("Visiting ClassExpressionContext:", ctx.getText());
+    if (ctx.ID()) {
+      const identifier = ctx.ID().getText();
+      this.lastIdentifier = identifier;
+      console.log("Identifier:", identifier);
+    }
+    if (ctx.KW_AND()) {
+      console.log("Keyword 'and' found. Returning:", this.lastIdentifier);
+      return this.lastIdentifier;
+    }
+    // Continue traversal
+    return this.visitChildren(ctx);
+  }
+}
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
